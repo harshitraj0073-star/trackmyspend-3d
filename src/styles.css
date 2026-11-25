@@ -1,3 +1,6 @@
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --bg: #070b14;
   --emerald: #10b981;

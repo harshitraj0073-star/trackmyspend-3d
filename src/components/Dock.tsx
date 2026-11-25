@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { STATIONS } from "../lib/constants";
 import { useStore } from "../store/useStore";
 import { flyTo } from "../world/navigation";
+import { GlassTabs, type GlassTabItem } from "./GlassTabs";
 
-/** Floating glass navigation dock: 10 stations with lock indicator until Money setup is saved + Simple View toggle. */
+/** Floating glass navigation dock powered by GlassTabs (Framer Motion spring pill + keyboard a11y). */
 export function Dock(): JSX.Element {
   const current = useStore((s) => s.selectedStation);
   const setupComplete = useStore((s) => s.profile.setupComplete);
@@ -11,7 +12,44 @@ export function Dock(): JSX.Element {
   const setSettings = useStore((s) => s.setSettings);
   const [lockNotice, setLockNotice] = useState(false);
 
-  const handleStationClick = (index: number): void => {
+  const tabs: GlassTabItem[] = useMemo(() => {
+    const stationTabs: GlassTabItem[] = STATIONS.map((s, i) => {
+      const locked = !setupComplete && i > 1;
+      return {
+        id: s.id,
+        label: s.label,
+        disabled: locked,
+        ariaLabel: locked
+          ? `${s.label} (locked — enter your money first)`
+          : `Go to station ${i}: ${s.label}`,
+        icon: locked ? (
+          <span className="text-[11px] leading-none" aria-hidden="true">
+            🔒
+          </span>
+        ) : undefined
+      };
+    });
+
+    stationTabs.push({
+      id: "simple-view",
+      label: simpleView ? "3D View" : "Simple View",
+      ariaLabel: "Toggle Simple view"
+    });
+
+    return stationTabs;
+  }, [setupComplete, simpleView]);
+
+  const activeTabId = simpleView ? "simple-view" : STATIONS[current]?.id ?? "intro";
+
+  const handleTabChange = (id: string): void => {
+    if (id === "simple-view") {
+      setSettings({ simpleView: !simpleView });
+      return;
+    }
+
+    const index = STATIONS.findIndex((s) => s.id === id);
+    if (index === -1) return;
+
     if (!setupComplete && index > 1) {
       setLockNotice(true);
       if (simpleView) setSettings({ simpleView: false });
@@ -19,6 +57,7 @@ export function Dock(): JSX.Element {
       window.setTimeout(() => setLockNotice(false), 2600);
       return;
     }
+
     if (simpleView) setSettings({ simpleView: false });
     flyTo(index);
   };
@@ -30,50 +69,12 @@ export function Dock(): JSX.Element {
           🔒 Enter your money to continue
         </div>
       )}
-      <nav className="dock" aria-label="Stations">
-        <ol className="dock__list">
-          {STATIONS.map((s, i) => {
-            const active = !simpleView && i === current;
-            const locked = !setupComplete && i > 1;
-            return (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  className={`dock__btn${active ? " is-active" : ""}${locked ? " is-locked" : ""}`}
-                  aria-current={active ? "step" : undefined}
-                  aria-disabled={locked || undefined}
-                  aria-label={
-                    locked
-                      ? `${s.label} (locked — enter your money first)`
-                      : `Go to station ${i}: ${s.label}`
-                  }
-                  onClick={() => handleStationClick(i)}
-                >
-                  {locked ? (
-                    <span className="dock__lock" aria-hidden="true">
-                      🔒
-                    </span>
-                  ) : (
-                    <span className="dock__dot" aria-hidden="true" />
-                  )}
-                  <span className="dock__label">{s.label}</span>
-                </button>
-              </li>
-            );
-          })}
-          <li>
-            <button
-              type="button"
-              className={`dock__btn dock__simple${simpleView ? " is-active" : ""}`}
-              aria-pressed={simpleView}
-              aria-label="Toggle Simple view"
-              onClick={() => setSettings({ simpleView: !simpleView })}
-            >
-              <span className="dock__label">{simpleView ? "3D View" : "Simple View"}</span>
-            </button>
-          </li>
-        </ol>
-      </nav>
+      <GlassTabs
+        tabs={tabs}
+        activeTab={activeTabId}
+        onChange={handleTabChange}
+        ariaLabel="Stations"
+      />
     </div>
   );
 }
